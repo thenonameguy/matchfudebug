@@ -68,7 +68,7 @@ class MatcherOfflineDebug:
         return sorted(set(ids)) 
 
     def getTimeStamps(self):
-        timestampindex=4
+        timestampindex=5
         provider=self.find_layer_by_name("prior_statuses").dataProvider()
         provider.select([timestampindex])
         feat=QgsFeature()
@@ -109,18 +109,25 @@ class MatcherOfflineDebug:
             self.showByID()
 
     def getWantedLayers(self):
-        matchid_layer_names=["prior_statuses","prior_teleports","prior_candidates_0","last_nodes_to","last_nodes_from","last_statuses"]
+        matchid_layer_names=["prior_statuses","prior_teleports","prior_candidates_0","last_nodes_to","last_nodes_from","last_statuses","matched_candidates"]
         self.wanted_layers={}
+        self.orig_subsets={}
+        self.concat_helper={}
         for name in matchid_layer_names:
             self.wanted_layers[name]=self.find_layer_by_name(name)
+            self.orig_subsets[name]=self.wanted_layers[name].subsetString()
+            if self.orig_subsets[name]=="":
+                self.concat_helper[name]=" "
+            else:
+                self.concat_helper[name]=" and "
 
     def showByID(self):
         #TODO: this is where the magic will happen
         for name in self.wanted_layers:
             if name[:5]=="prior":
-                self.wanted_layers[name].setSubsetString("matchid < "+str(self.currentid))
+                self.wanted_layers[name].setSubsetString(self.orig_subsets[name]+self.concat_helper[name]+"matchid < "+str(self.currentid))
             else:
-                self.wanted_layers[name].setSubsetString("matchid = "+str(self.currentid))
+                self.wanted_layers[name].setSubsetString(self.orig_subsets[name]+self.concat_helper[name]+"matchid = "+str(self.currentid))
         self.dlg.ui.label.setText(str(self.currentid)+'/'+str(len(self.matchids)))
         self.dlg.ui.biglabel.setText(str(self.timestamps[self.currentid]))
         self.canvas.refresh()
