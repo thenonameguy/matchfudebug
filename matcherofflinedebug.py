@@ -34,6 +34,8 @@ class MatcherOfflineDebug:
     def __init__(self, iface):
         # Save reference to the QGIS interface
         self.iface = iface
+        self.canvas=iface.mapCanvas()
+
         # initialize plugin directory
         self.plugin_dir = QFileInfo(QgsApplication.qgisUserDbFilePath()).path() + "/python/plugins/matcherofflinedebug"
         # initialize locale
@@ -52,6 +54,31 @@ class MatcherOfflineDebug:
 
         # Create the dialog (after translation) and keep reference
         self.dlg = MatcherOfflineDebugDialog()
+    def getMatchIds(self):
+        matchidIndex=1
+        provider=self.find_layer_by_name("prior_statuses").dataProvider()
+        provider.select([matchidIndex])
+        feat=QgsFeature()
+        li=[]
+        while provider.nextFeature(feat):
+            li.append(feat.attributeMap())
+        ids=[]
+        for i in range(len(li)):
+            ids.append(li[i][matchidIndex].toInt()[0])
+        return sorted(set(ids)) 
+
+    def getTimeStamps(self):
+        timestampindex=4
+        provider=self.find_layer_by_name("prior_statuses").dataProvider()
+        provider.select([timestampindex])
+        feat=QgsFeature()
+        li=[]
+        while provider.nextFeature(feat):
+            li.append(feat.attributeMap())
+        timestamps=[]
+        for i in range(len(li)):
+            timestamps.append(li[i][timestampindex].toString())
+        return sorted(set(timestamps)) 
 
     def initGui(self):
         # Create action that will start plugin configuration
@@ -64,6 +91,42 @@ class MatcherOfflineDebug:
         # Add toolbar button and menu item
         self.iface.addToolBarIcon(self.action)
         self.iface.addPluginToMenu(u"&MatcherOfflineDebug", self.action)
+        QObject.connect(self.dlg.ui.btn_nextID,SIGNAL("clicked()"),self.nextID)
+        QObject.connect(self.dlg.ui.btn_prevID,SIGNAL("clicked()"),self.prevID)
+        QObject.connect(self.dlg.ui.btn_jump,SIGNAL("clicked()"),self.jump)
+    
+    def jump(self):
+        self.addToCurrentID(self.dlg.ui.inp_jump.text().toInt()[0]-self.currentid)
+
+    def nextID(self):
+        self.addToCurrentID(1)
+
+    def addToCurrentID(self,change):
+        if self.currentid+change<=len(self.matchids) and self.currentid+change>0:
+            self.currentid+=change
+            print "Current ID:",self.currentid
+            self.dlg.ui.label.setText(str(self.currentid)+'/'+str(len(self.matchids)))
+            self.showByID()
+
+    def getWantedLayers(self):
+        matchid_layer_names=["prior_statuses","prior_teleports","prior_candidates_0","last_nodes_to","last_nodes_from","last_statuses"]
+        self.wanted_layers={}
+        for name in matchid_layer_names:
+            self.wanted_layers[name]=self.find_layer_by_name(name)
+
+    def showByID(self):
+        #TODO: this is where the magic will happen
+        for name in self.wanted_layers:
+            if name[:5]=="prior":
+                self.wanted_layers[name].setSubsetString("matchid < "+str(self.currentid))
+            else:
+                self.wanted_layers[name].setSubsetString("matchid = "+str(self.currentid))
+        self.dlg.ui.label.setText(str(self.currentid)+'/'+str(len(self.matchids)))
+        self.dlg.ui.biglabel.setText(str(self.timestamps[self.currentid]))
+        self.canvas.refresh()
+
+    def prevID(self):
+        self.addToCurrentID(-1)
 
     def unload(self):
         # Remove the plugin menu item and icon
@@ -71,13 +134,19 @@ class MatcherOfflineDebug:
         self.iface.removeToolBarIcon(self.action)
 
     # run method that performs all the real work
+    def find_layer_by_name(self,name):
+        for layer in self.layers:
+            if layer.name()==name:
+                return layer
+        return "404"
+
     def run(self):
         # show the dialog
+        self.layers=self.canvas.layers()
+        self.matchids=self.getMatchIds()
+        self.timestamps=self.getTimeStamps()
+        self.currentid=self.matchids[0]
+        self.getWantedLayers()
+        self.showByID()
+        self.dlg.ui.label.setText(str(self.currentid)+'/'+str(len(self.matchids)))
         self.dlg.show()
-        # Run the dialog event loop
-        result = self.dlg.exec_()
-        # See if OK was pressed
-        if result == 1:
-            # do something useful (delete the line containing pass and
-            # substitute with your code)
-            pass
